@@ -171,3 +171,37 @@ func TestParseHookForWorktree(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupGlobalClosedHook(t *testing.T) {
+	var calledCommands [][]string
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		cmd := append([]string{name}, args...)
+		calledCommands = append(calledCommands, cmd)
+		return run.CommandResult{}, nil
+	})
+
+	c := NewClient(mock)
+	err := c.SetupGlobalClosedHook("/my/worktrees/dir")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(calledCommands) != 1 {
+		t.Fatalf("expected 1 tmux command, got %d", len(calledCommands))
+	}
+
+	expectedCmd := []string{
+		"tmux", "set-hook", "-g", "session-closed[99]",
+		`run-shell 'if [ -d "/my/worktrees/dir/#{hook_session_name}" ]; then git -C "/my/worktrees/dir/#{hook_session_name}" worktree remove --force "/my/worktrees/dir/#{hook_session_name}"; fi'`,
+	}
+
+	if len(calledCommands[0]) != len(expectedCmd) {
+		t.Fatalf("expected command length %d, got %d", len(expectedCmd), len(calledCommands[0]))
+	}
+
+	for i, val := range expectedCmd {
+		if calledCommands[0][i] != val {
+			t.Errorf("expected arg %d of command to be %q, got %q", i, val, calledCommands[0][i])
+		}
+	}
+}

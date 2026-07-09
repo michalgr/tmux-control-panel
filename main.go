@@ -22,6 +22,15 @@ func main() {
 	tmuxClient, gitClient := initClients()
 	verifyTmuxInstalled(tmuxClient)
 
+	worktreesDir := filepath.Join(getCacheDir(), "tmux-cp", "worktrees")
+	if err := os.MkdirAll(worktreesDir, 0755); err != nil {
+		logger.Printf("Failed to create worktrees directory: %v\n", err)
+	}
+
+	if err := tmuxClient.SetupGlobalClosedHook(worktreesDir); err != nil {
+		logger.Printf("Failed to setup global tmux closed hook: %v\n", err)
+	}
+
 	m := initModel(logger, tmuxClient, gitClient)
 	runProgram(m, logger)
 }
@@ -59,11 +68,7 @@ func runProgram(m ui.Model, logger *log.Logger) {
 }
 
 func initLogging() (*os.File, *log.Logger) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		cacheDir = os.TempDir()
-	}
-	logDir := filepath.Join(cacheDir, "tmux-cp")
+	logDir := filepath.Join(getCacheDir(), "tmux-cp")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
 		os.Exit(1)
@@ -78,4 +83,12 @@ func initLogging() (*os.File, *log.Logger) {
 	logger := log.New(logFile, "[tmux-cp] ", log.LstdFlags|log.Lshortfile)
 	logger.Printf("Starting Tmux Control Panel TUI... Logging to: %s\n", logFilePath)
 	return logFile, logger
+}
+
+func getCacheDir() string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return os.TempDir()
+	}
+	return cacheDir
 }
