@@ -103,7 +103,7 @@ func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
 func (c *Client) populateWorktreePaths(sessions []Session) error {
 	for i := range sessions {
 		sess := &sessions[i]
-		res, err := c.runner.Run("tmux", "display-message", "-t", sess.Name, "-p", "#{@worktree_path}")
+		res, err := c.runner.Run("tmux", "show-options", "-q", "-t", sess.Name, "-v", "@worktree_path")
 		if err != nil {
 			return fmt.Errorf("failed to query worktree path for session %s: %s: %w", sess.Name, strings.TrimSpace(res.Stderr), err)
 		}

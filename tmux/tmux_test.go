@@ -20,13 +20,13 @@ func TestListSessions(t *testing.T) {
 				return run.CommandResult{
 					Stdout: "my-session;main-win;1\nmy-session;other-win;0\n",
 				}, nil
-			case "display-message":
-				if len(args) >= 5 && args[1] == "-t" && args[2] == "my-session" && args[3] == "-p" && args[4] == "#{@worktree_path}" {
+			case "show-options":
+				if len(args) >= 6 && args[1] == "-q" && args[2] == "-t" && args[3] == "my-session" && args[4] == "-v" && args[5] == "@worktree_path" {
 					return run.CommandResult{
 						Stdout: "/some/worktree\n",
 					}, nil
 				}
-				return run.CommandResult{}, errors.New("unexpected display-message args")
+				return run.CommandResult{}, errors.New("unexpected show-options args")
 			}
 		}
 		return run.CommandResult{}, errors.New("unexpected command")
@@ -178,7 +178,7 @@ func TestListSessions_EmptyAndError(t *testing.T) {
 					return run.CommandResult{
 						Stdout: "my-session;main-win;1\nmy-session;other-win;0\n",
 					}, nil
-				case "display-message":
+				case "show-options":
 					return run.CommandResult{
 						Stdout: "\n",
 					}, nil
@@ -212,7 +212,7 @@ func TestListSessions_EmptyAndError(t *testing.T) {
 					return run.CommandResult{
 						Stdout: "my-session;main-win;1\n",
 					}, nil
-				case "display-message":
+				case "show-options":
 					return run.CommandResult{
 						Stderr: "some error\n",
 					}, errors.New("command failed")
