@@ -103,15 +103,13 @@ func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
 func (c *Client) populateWorktreePaths(sessions []Session) error {
 	for i := range sessions {
 		sess := &sessions[i]
-		res, err := c.runner.Run("tmux", "show-hooks", "-t", sess.Name)
+		res, err := c.runner.Run("tmux", "display-message", "-t", sess.Name, "-p", "#{@worktree_path}")
 		if err != nil {
-			return fmt.Errorf("failed to show hooks for session %s: %s: %w", sess.Name, strings.TrimSpace(res.Stderr), err)
+			return fmt.Errorf("failed to query worktree path for session %s: %s: %w", sess.Name, strings.TrimSpace(res.Stderr), err)
 		}
-		for _, hLine := range res.Lines() {
-			if wtPath, ok := parseHookForWorktree(hLine); ok {
-				sess.WorktreePath = wtPath
-				break
-			}
+		path := strings.TrimSpace(res.Stdout)
+		if path != "" {
+			sess.WorktreePath = path
 		}
 	}
 	return nil
@@ -166,35 +164,6 @@ func parseWindowInfo(line string) (windowInfo, bool) {
 	}, true
 }
 
-// parseHookForWorktree parses a session-closed hook to extract the Git worktree path.
-func parseHookForWorktree(line string) (string, bool) {
-	if strings.Contains(line, "session-closed") && strings.Contains(line, "worktree remove") {
-		return parseWorktreePathFromHook(line), true
-	}
-	return "", false
-}
-
-// parseWorktreePathFromHook extracts the path from a hook command like:
-// session-closed[...] run-shell "git -C /repo/path worktree remove --force /path/to/worktree"
-func parseWorktreePathFromHook(hookLine string) string {
-	idx := strings.Index(hookLine, "worktree remove --force ")
-	if idx == -1 {
-		idx = strings.Index(hookLine, "worktree remove ")
-		if idx == -1 {
-			return ""
-		}
-		idx += len("worktree remove ")
-	} else {
-		idx += len("worktree remove --force ")
-	}
-
-	pathPart := hookLine[idx:]
-	// Clean up quotes and trailing characters
-	pathPart = strings.TrimSpace(pathPart)
-	pathPart = strings.Trim(pathPart, `"'`)
-	return pathPart
-}
-
 // CreateSession creates a standard Tmux session.
 func (c *Client) CreateSession(name, path string) error {
 	res, err := c.runner.Run("tmux", "new-session", "-d", "-s", name, "-c", path)
@@ -204,27 +173,26 @@ func (c *Client) CreateSession(name, path string) error {
 	return nil
 }
 
-// CreateWorktreeSession creates a Git worktree first and then launches a tmux session rooted there.
-// It sets a session-closed hook to delete the worktree when the session is closed.
-func (c *Client) CreateWorktreeSession(name, repoPath, branchName, worktreePath string, createBranch bool) error {
+// CreateWorktreeSession launches a tmux session rooted at the given worktree path
+// and sets the @worktree_path user option on the session to support worktree metadata queries.
+func (c *Client) CreateWorktreeSession(name, worktreePath string) error {
 	res, err := c.runner.Run("tmux", "new-session", "-d", "-s", name, "-c", worktreePath)
 	if err != nil {
 		return fmt.Errorf("failed to start tmux session in worktree: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
 
-	return c.setSessionClosedHook(name, repoPath, worktreePath)
+	return c.setWorktreeMetadata(name, worktreePath)
 }
 
-func (c *Client) setSessionClosedHook(name, repoPath, worktreePath string) error {
-	cleanupCmd := fmt.Sprintf(`git -C "%s" worktree remove --force "%s"`, repoPath, worktreePath)
-	log.Printf("[tmux] Setting session-closed hook for session %s to remove worktree: %s", name, worktreePath)
-	res, err := c.runner.Run("tmux", "set-hook", "-t", name, "session-closed", fmt.Sprintf("run-shell '%s'", cleanupCmd))
+func (c *Client) setWorktreeMetadata(name, worktreePath string) error {
+	log.Printf("[tmux] Setting @worktree_path option for session %s to: %s", name, worktreePath)
+	res, err := c.runner.Run("tmux", "set-option", "-t", name, "@worktree_path", worktreePath)
 	if err != nil {
-		log.Printf("[tmux] Failed to set session-closed hook: %v", err)
+		log.Printf("[tmux] Failed to set @worktree_path option: %v", err)
 		if _, errKill := c.runner.Run("tmux", "kill-session", "-t", name); errKill != nil {
-			log.Printf("[tmux] Failed to kill session %s during hook failure cleanup: %v", name, errKill)
+			log.Printf("[tmux] Failed to kill session %s during metadata setup failure: %v", name, errKill)
 		}
-		return fmt.Errorf("failed to set tmux session-closed hook: %s: %w", strings.TrimSpace(res.Stderr), err)
+		return fmt.Errorf("failed to set tmux worktree metadata: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
 	return nil
 }

@@ -703,7 +703,7 @@ func (s CreateWorktreeSessionNameState) handleEnter(m *Model) (ViewState, tea.Cm
 		return ErrorState{err: err.Error()}, nil
 	}
 
-	err = m.tmuxClient.CreateWorktreeSession(val, m.cwd, s.branch, worktreePath, s.createBranch)
+	err = m.tmuxClient.CreateWorktreeSession(val, worktreePath)
 	if err != nil {
 		if errRm := m.gitClient.RemoveWorktree(m.cwd, worktreePath); errRm != nil {
 			m.logger.Printf("Failed to remove worktree path %s: %v", worktreePath, errRm)

@@ -20,10 +20,13 @@ func TestListSessions(t *testing.T) {
 				return run.CommandResult{
 					Stdout: "my-session;main-win;1\nmy-session;other-win;0\n",
 				}, nil
-			case "show-hooks":
-				return run.CommandResult{
-					Stdout: "session-closed run-shell 'git worktree remove --force /some/worktree'\n",
-				}, nil
+			case "display-message":
+				if len(args) >= 5 && args[1] == "-t" && args[2] == "my-session" && args[3] == "-p" && args[4] == "#{@worktree_path}" {
+					return run.CommandResult{
+						Stdout: "/some/worktree\n",
+					}, nil
+				}
+				return run.CommandResult{}, errors.New("unexpected display-message args")
 			}
 		}
 		return run.CommandResult{}, errors.New("unexpected command")
@@ -97,7 +100,7 @@ func TestCreateWorktreeSession(t *testing.T) {
 	})
 
 	c := NewClient(mock)
-	err := c.CreateWorktreeSession("my-wt-sess", "/my/repo", "my-branch", "/my/wt/path", false)
+	err := c.CreateWorktreeSession("my-wt-sess", "/my/wt/path")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -114,61 +117,17 @@ func TestCreateWorktreeSession(t *testing.T) {
 		}
 	}
 
-	// Verify second command is tmux set-hook
-	expectedSetHook := []string{
-		"tmux", "set-hook", "-t", "my-wt-sess", "session-closed",
-		`run-shell 'git -C "/my/repo" worktree remove --force "/my/wt/path"'`,
+	// Verify second command is tmux set-option
+	expectedSetOption := []string{
+		"tmux", "set-option", "-t", "my-wt-sess", "@worktree_path", "/my/wt/path",
 	}
-	for i, val := range expectedSetHook {
+	if len(calledCommands[1]) != len(expectedSetOption) {
+		t.Fatalf("expected second command length %d, got %d", len(expectedSetOption), len(calledCommands[1]))
+	}
+	for i, val := range expectedSetOption {
 		if calledCommands[1][i] != val {
 			t.Errorf("expected arg %d of second command to be %q, got %q", i, val, calledCommands[1][i])
 		}
-	}
-}
-
-func TestParseHookForWorktree(t *testing.T) {
-	tests := []struct {
-		name         string
-		line         string
-		expectedPath string
-		expectedOk   bool
-	}{
-		{
-			name:         "Old style with force",
-			line:         "session-closed run-shell 'git worktree remove --force /some/worktree'",
-			expectedPath: "/some/worktree",
-			expectedOk:   true,
-		},
-		{
-			name:         "Old style without force",
-			line:         "session-closed run-shell 'git worktree remove /some/worktree'",
-			expectedPath: "/some/worktree",
-			expectedOk:   true,
-		},
-		{
-			name:         "New style with -C flag and quotes",
-			line:         `session-closed run-shell 'git -C "/repo/path" worktree remove --force "/some/worktree"'`,
-			expectedPath: "/some/worktree",
-			expectedOk:   true,
-		},
-		{
-			name:         "Non-matching hook",
-			line:         "session-closed run-shell 'echo hello'",
-			expectedPath: "",
-			expectedOk:   false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			path, ok := parseHookForWorktree(tc.line)
-			if ok != tc.expectedOk {
-				t.Errorf("expected ok to be %t, got %t", tc.expectedOk, ok)
-			}
-			if path != tc.expectedPath {
-				t.Errorf("expected path to be %q, got %q", tc.expectedPath, path)
-			}
-		})
 	}
 }
 
@@ -203,5 +162,263 @@ func TestSetupGlobalClosedHook(t *testing.T) {
 		if calledCommands[0][i] != val {
 			t.Errorf("expected arg %d of command to be %q, got %q", i, val, calledCommands[0][i])
 		}
+	}
+}
+
+func TestListSessions_EmptyAndError(t *testing.T) {
+	t.Run("empty_worktree_path", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			if name == "tmux" {
+				switch args[0] {
+				case "list-sessions":
+					return run.CommandResult{
+						Stdout: "my-session;2;0;1609459200;/some/path\n",
+					}, nil
+				case "list-windows":
+					return run.CommandResult{
+						Stdout: "my-session;main-win;1\nmy-session;other-win;0\n",
+					}, nil
+				case "display-message":
+					return run.CommandResult{
+						Stdout: "\n",
+					}, nil
+				}
+			}
+			return run.CommandResult{}, errors.New("unexpected command")
+		})
+
+		c := NewClient(mock)
+		sessions, err := c.ListSessions()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(sessions) != 1 {
+			t.Fatalf("expected 1 session, got %d", len(sessions))
+		}
+		if sessions[0].WorktreePath != "" {
+			t.Errorf("expected empty worktree path, got %q", sessions[0].WorktreePath)
+		}
+	})
+
+	t.Run("display_message_error", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			if name == "tmux" {
+				switch args[0] {
+				case "list-sessions":
+					return run.CommandResult{
+						Stdout: "my-session;2;0;1609459200;/some/path\n",
+					}, nil
+				case "list-windows":
+					return run.CommandResult{
+						Stdout: "my-session;main-win;1\n",
+					}, nil
+				case "display-message":
+					return run.CommandResult{
+						Stderr: "some error\n",
+					}, errors.New("command failed")
+				}
+			}
+			return run.CommandResult{}, errors.New("unexpected command")
+		})
+
+		c := NewClient(mock)
+		_, err := c.ListSessions()
+		if err == nil {
+			t.Error("expected error but got nil")
+		}
+	})
+}
+
+func TestCreateWorktreeSession_Failure(t *testing.T) {
+	var calledCommands [][]string
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		cmd := append([]string{name}, args...)
+		calledCommands = append(calledCommands, cmd)
+		if name == "tmux" && args[0] == "set-option" {
+			return run.CommandResult{Stderr: "failed setting option"}, errors.New("set-option error")
+		}
+		return run.CommandResult{}, nil
+	})
+
+	c := NewClient(mock)
+	err := c.CreateWorktreeSession("my-wt-sess", "/my/wt/path")
+	if err == nil {
+		t.Fatal("expected error from CreateWorktreeSession, got nil")
+	}
+
+	// We expect 3 commands:
+	// 1. new-session
+	// 2. set-option
+	// 3. kill-session (due to option setup failure)
+	if len(calledCommands) != 3 {
+		t.Fatalf("expected 3 commands called, got %d", len(calledCommands))
+	}
+
+	if calledCommands[2][0] != "tmux" || calledCommands[2][1] != "kill-session" || calledCommands[2][3] != "my-wt-sess" {
+		t.Errorf("expected third command to kill the session, got %v", calledCommands[2])
+	}
+}
+
+func TestCreateSession(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var calledCommands [][]string
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			cmd := append([]string{name}, args...)
+			calledCommands = append(calledCommands, cmd)
+			return run.CommandResult{}, nil
+		})
+
+		c := NewClient(mock)
+		err := c.CreateSession("new-sess", "/some/path")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(calledCommands) != 1 {
+			t.Fatalf("expected 1 command, got %d", len(calledCommands))
+		}
+
+		expected := []string{"tmux", "new-session", "-d", "-s", "new-sess", "-c", "/some/path"}
+		for i, val := range expected {
+			if calledCommands[0][i] != val {
+				t.Errorf("expected arg %d to be %q, got %q", i, val, calledCommands[0][i])
+			}
+		}
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			return run.CommandResult{Stderr: "create session failed"}, errors.New("command failed")
+		})
+
+		c := NewClient(mock)
+		err := c.CreateSession("new-sess", "/some/path")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestKillSession(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		var calledCommands [][]string
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			cmd := append([]string{name}, args...)
+			calledCommands = append(calledCommands, cmd)
+			return run.CommandResult{}, nil
+		})
+
+		c := NewClient(mock)
+		err := c.KillSession("my-sess")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if len(calledCommands) != 1 {
+			t.Fatalf("expected 1 command, got %d", len(calledCommands))
+		}
+
+		expected := []string{"tmux", "kill-session", "-t", "my-sess"}
+		for i, val := range expected {
+			if calledCommands[0][i] != val {
+				t.Errorf("expected arg %d to be %q, got %q", i, val, calledCommands[0][i])
+			}
+		}
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			return run.CommandResult{Stderr: "kill failed"}, errors.New("command failed")
+		})
+
+		c := NewClient(mock)
+		err := c.KillSession("my-sess")
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestListSessions_MoreFailures(t *testing.T) {
+	t.Run("no_server_running", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			return run.CommandResult{Stderr: "no server running on /tmp/tmux-1000/default\n"}, errors.New("exit status 1")
+		})
+
+		c := NewClient(mock)
+		_, err := c.ListSessions()
+		if !errors.Is(err, ErrNoServer) {
+			t.Errorf("expected ErrNoServer, got %v", err)
+		}
+	})
+
+	t.Run("list_sessions_general_error", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			return run.CommandResult{Stderr: "permission denied\n"}, errors.New("exit status 1")
+		})
+
+		c := NewClient(mock)
+		_, err := c.ListSessions()
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+
+	t.Run("list_windows_failure", func(t *testing.T) {
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			if name == "tmux" {
+				switch args[0] {
+				case "list-sessions":
+					return run.CommandResult{Stdout: "my-session;2;0;1609459200;/some/path\n"}, nil
+				case "list-windows":
+					return run.CommandResult{Stderr: "list windows failed\n"}, errors.New("command failed")
+				}
+			}
+			return run.CommandResult{}, errors.New("unexpected command")
+		})
+
+		c := NewClient(mock)
+		_, err := c.ListSessions()
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
+func TestCreateWorktreeSession_NewSessionFailure(t *testing.T) {
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		if name == "tmux" && args[0] == "new-session" {
+			return run.CommandResult{Stderr: "new-session failed"}, errors.New("command failed")
+		}
+		return run.CommandResult{}, nil
+	})
+
+	c := NewClient(mock)
+	err := c.CreateWorktreeSession("my-wt-sess", "/my/wt/path")
+	if err == nil {
+		t.Fatal("expected error from CreateWorktreeSession when new-session fails, got nil")
+	}
+}
+
+func TestListSessions_EmptyResponse(t *testing.T) {
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		if name == "tmux" {
+			switch args[0] {
+			case "list-sessions":
+				return run.CommandResult{Stdout: ""}, nil
+			case "list-windows":
+				return run.CommandResult{Stdout: ""}, nil
+			}
+		}
+		return run.CommandResult{}, errors.New("unexpected command")
+	})
+
+	c := NewClient(mock)
+	sessions, err := c.ListSessions()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions, got %d", len(sessions))
 	}
 }
