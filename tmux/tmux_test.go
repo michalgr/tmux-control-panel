@@ -426,3 +426,38 @@ func TestListSessions_ErrorConnectingTo(t *testing.T) {
 		t.Errorf("expected ErrNoServer, got %v", err)
 	}
 }
+
+func TestCurrentSessionName(t *testing.T) {
+	t.Run("outside tmux", func(t *testing.T) {
+		t.Setenv("TMUX", "")
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			return run.CommandResult{}, errors.New("should not be called")
+		})
+		c := NewClient(mock)
+		name, err := c.CurrentSessionName()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if name != "" {
+			t.Errorf("expected empty session name, got %q", name)
+		}
+	})
+
+	t.Run("inside tmux", func(t *testing.T) {
+		t.Setenv("TMUX", "/tmp/tmux-1000/default,123,0")
+		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			if name == "tmux" && args[0] == "display-message" && args[1] == "-p" && args[2] == "#S" {
+				return run.CommandResult{Stdout: "my-current-session\n"}, nil
+			}
+			return run.CommandResult{}, errors.New("unexpected command")
+		})
+		c := NewClient(mock)
+		name, err := c.CurrentSessionName()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if name != "my-current-session" {
+			t.Errorf("expected session name 'my-current-session', got %q", name)
+		}
+	})
+}

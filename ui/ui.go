@@ -87,10 +87,11 @@ var (
 )
 
 type Model struct {
-	sessions      []tmux.Session
-	selectedIndex int
-	width, height int
-	state         ViewState
+	sessions        []tmux.Session
+	selectedIndex   int
+	width, height   int
+	state           ViewState
+	initialLoadDone bool
 
 	// Project environment
 	cwd string
@@ -170,6 +171,10 @@ func (m *Model) handleSystemMessage(msg tea.Msg) (tea.Cmd, bool) {
 		return tea.Batch(m.refreshSessionsCmd(), m.tickCmd()), true
 	case []tmux.Session:
 		m.sessions = msg
+		if !m.initialLoadDone {
+			m.initialLoadDone = true
+			m.selectCurrentSession()
+		}
 		m.adjustSelectedIndex()
 		return nil, true
 	case sessionDetachedMsg:
@@ -188,6 +193,19 @@ func (m *Model) adjustSelectedIndex() {
 	}
 	if m.selectedIndex < 0 {
 		m.selectedIndex = 0
+	}
+}
+
+func (m *Model) selectCurrentSession() {
+	currentSessName, err := m.tmuxClient.CurrentSessionName()
+	if err != nil || currentSessName == "" {
+		return
+	}
+	for i, sess := range m.sessions {
+		if sess.Name == currentSessName {
+			m.selectedIndex = i
+			break
+		}
 	}
 }
 

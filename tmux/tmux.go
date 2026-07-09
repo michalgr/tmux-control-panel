@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -228,6 +229,18 @@ func (c *Client) GetSessionOption(sessionName, option string) (string, error) {
 	res, err := c.runner.Run("tmux", "show-options", "-q", "-t", sessionName, "-v", option)
 	if err != nil {
 		return "", fmt.Errorf("failed to get tmux option: %s: %w", strings.TrimSpace(res.Stderr), err)
+	}
+	return strings.TrimSpace(res.Stdout), nil
+}
+
+// CurrentSessionName returns the name of the current tmux session if running inside tmux.
+func (c *Client) CurrentSessionName() (string, error) {
+	if os.Getenv("TMUX") == "" {
+		return "", nil
+	}
+	res, err := c.runner.Run("tmux", "display-message", "-p", "#S")
+	if err != nil {
+		return "", fmt.Errorf("failed to get current session name: %w", err)
 	}
 	return strings.TrimSpace(res.Stdout), nil
 }

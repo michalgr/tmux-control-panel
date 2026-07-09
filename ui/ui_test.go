@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"io"
 	"log"
 	"strings"
@@ -161,4 +162,78 @@ func TestGetStatusLine_Truncation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInitialSelection_CurrentActiveSession(t *testing.T) {
+	logger := log.New(io.Discard, "", 0)
+
+	t.Run("when inside tmux and session exists", func(t *testing.T) {
+		t.Setenv("TMUX", "/tmp/tmux-1000/default,123,0")
+		mockRunner := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			if name == "tmux" && args[0] == "display-message" && args[1] == "-p" && args[2] == "#S" {
+				return run.CommandResult{Stdout: "session-2\n"}, nil
+			}
+			return run.CommandResult{}, nil
+		})
+		tmuxClient := tmux.NewClient(mockRunner)
+		gitClient := git.NewClient(mockRunner)
+		wtManager := worktree.NewManager(gitClient, tmuxClient, "/tmp/worktrees")
+
+		model, err := NewModel(logger, tmuxClient, gitClient, wtManager)
+		if err != nil {
+			t.Fatalf("failed to create model: %v", err)
+		}
+
+		sessions := []tmux.Session{
+			{Name: "session-1"},
+			{Name: "session-2"},
+			{Name: "session-3"},
+		}
+
+		// Send sessions list to simulate first load
+		resModel, _ := model.Update(sessions)
+		model = resModel.(Model)
+
+		if model.selectedIndex != 1 {
+			t.Errorf("expected selectedIndex to be 1 (session-2), got %d", model.selectedIndex)
+		}
+		if !model.initialLoadDone {
+			t.Error("expected initialLoadDone to be true")
+		}
+
+		// Simulate second load with same/different sessions, selectedIndex should NOT change automatically
+		model.selectedIndex = 2
+		resModel, _ = model.Update(sessions)
+		model = resModel.(Model)
+		if model.selectedIndex != 2 {
+			t.Errorf("expected selectedIndex to remain 2, got %d", model.selectedIndex)
+		}
+	})
+
+	t.Run("when outside tmux", func(t *testing.T) {
+		t.Setenv("TMUX", "")
+		mockRunner := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+			return run.CommandResult{}, errors.New("should not be called")
+		})
+		tmuxClient := tmux.NewClient(mockRunner)
+		gitClient := git.NewClient(mockRunner)
+		wtManager := worktree.NewManager(gitClient, tmuxClient, "/tmp/worktrees")
+
+		model, err := NewModel(logger, tmuxClient, gitClient, wtManager)
+		if err != nil {
+			t.Fatalf("failed to create model: %v", err)
+		}
+
+		sessions := []tmux.Session{
+			{Name: "session-1"},
+			{Name: "session-2"},
+		}
+
+		resModel, _ := model.Update(sessions)
+		model = resModel.(Model)
+
+		if model.selectedIndex != 0 {
+			t.Errorf("expected selectedIndex to be 0, got %d", model.selectedIndex)
+		}
+	})
 }
