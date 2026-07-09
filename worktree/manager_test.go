@@ -97,3 +97,39 @@ func TestCreateWorktreeSession_TmuxFailure(t *testing.T) {
 		t.Error("expected git worktree cleanup command, but not found")
 	}
 }
+
+func TestSetupClosedHook(t *testing.T) {
+	var calledCommands [][]string
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		calledCommands = append(calledCommands, append([]string{name}, args...))
+		return run.CommandResult{}, nil
+	})
+
+	gc := git.NewClient(mock)
+	tc := tmux.NewClient(mock)
+	mgr := NewManager(gc, tc, "/my/worktrees/dir")
+
+	err := mgr.SetupClosedHook()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(calledCommands) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(calledCommands))
+	}
+
+	expected := []string{
+		"tmux", "set-hook", "-g", "session-closed[99]",
+		"run-shell 'if [ -d \"/my/worktrees/dir/#{hook_session_name}\" ]; then git -C \"/my/worktrees/dir/#{hook_session_name}\" worktree remove --force \"/my/worktrees/dir/#{hook_session_name}\"; fi'",
+	}
+
+	if len(calledCommands[0]) != len(expected) {
+		t.Fatalf("command length mismatch: expected %d, got %d", len(expected), len(calledCommands[0]))
+	}
+
+	for i, val := range expected {
+		if calledCommands[0][i] != val {
+			t.Errorf("arg %d mismatch: expected %q, got %q", i, val, calledCommands[0][i])
+		}
+	}
+}

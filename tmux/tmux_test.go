@@ -162,7 +162,7 @@ func TestGetSessionOption(t *testing.T) {
 	})
 }
 
-func TestSetupGlobalClosedHook(t *testing.T) {
+func TestSetupHook(t *testing.T) {
 	var calledCommands [][]string
 	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
 		cmd := append([]string{name}, args...)
@@ -171,7 +171,7 @@ func TestSetupGlobalClosedHook(t *testing.T) {
 	})
 
 	c := NewClient(mock)
-	err := c.SetupGlobalClosedHook("/my/worktrees/dir")
+	err := c.SetupHook(true, "sess-name", "session-closed", "echo test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -181,8 +181,7 @@ func TestSetupGlobalClosedHook(t *testing.T) {
 	}
 
 	expectedCmd := []string{
-		"tmux", "set-hook", "-g", "session-closed[99]",
-		`run-shell 'if [ -d "/my/worktrees/dir/#{hook_session_name}" ]; then git -C "/my/worktrees/dir/#{hook_session_name}" worktree remove --force "/my/worktrees/dir/#{hook_session_name}"; fi'`,
+		"tmux", "set-hook", "-g", "-t", "sess-name", "session-closed", "echo test",
 	}
 
 	if len(calledCommands[0]) != len(expectedCmd) {
@@ -389,13 +388,13 @@ func TestListSessions_EmptyResponse(t *testing.T) {
 	}
 }
 
-func TestSetupGlobalClosedHook_NoServer(t *testing.T) {
+func TestSetupHook_NoServer(t *testing.T) {
 	t.Run("no server running", func(t *testing.T) {
 		mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
 			return run.CommandResult{Stderr: "no server running on /tmp/tmux-1000/default\n"}, errors.New("exit status 1")
 		})
 		c := NewClient(mock)
-		err := c.SetupGlobalClosedHook("/my/worktrees/dir")
+		err := c.SetupHook(true, "", "session-closed", "echo test")
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
 		}
@@ -406,7 +405,7 @@ func TestSetupGlobalClosedHook_NoServer(t *testing.T) {
 			return run.CommandResult{Stderr: "error connecting to /tmp/tmux-1001/test-socket (No such file or directory)\n"}, errors.New("exit status 1")
 		})
 		c := NewClient(mock)
-		err := c.SetupGlobalClosedHook("/my/worktrees/dir")
+		err := c.SetupHook(true, "", "session-closed", "echo test")
 		if err != nil {
 			t.Fatalf("expected nil error, got %v", err)
 		}

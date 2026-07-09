@@ -48,9 +48,17 @@ func (m *Manager) CreateWorktreeSession(repoPath, branchName, sessionName, workt
 		return fmt.Errorf("failed to set tmux worktree metadata: %w", err)
 	}
 
-	if err := m.tmuxClient.SetupGlobalClosedHook(m.worktreesDir); err != nil {
+	if err := m.SetupClosedHook(); err != nil {
 		log.Printf("[worktree-manager] Failed to setup global hook: %v", err)
 	}
 
 	return nil
+}
+
+// SetupClosedHook registers the global session-closed hook in tmux to clean up
+// temporary Git worktrees when a session is closed.
+func (m *Manager) SetupClosedHook() error {
+	cmd := fmt.Sprintf(`if [ -d "%s/#{hook_session_name}" ]; then git -C "%s/#{hook_session_name}" worktree remove --force "%s/#{hook_session_name}"; fi`, m.worktreesDir, m.worktreesDir, m.worktreesDir)
+	log.Printf("[worktree-manager] Registering global session-closed[99] hook to clean up worktrees in: %s", m.worktreesDir)
+	return m.tmuxClient.SetupHook(true, "", "session-closed[99]", fmt.Sprintf("run-shell '%s'", cmd))
 }

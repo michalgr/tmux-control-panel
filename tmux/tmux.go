@@ -196,18 +196,24 @@ func (c *Client) HasSession(name string) (bool, error) {
 	return false, nil
 }
 
-// SetupGlobalClosedHook registers a global session-closed hook (at index 99)
-// to automatically clean up temporary Git worktrees when a session is closed.
-func (c *Client) SetupGlobalClosedHook(worktreesDir string) error {
-	cmd := fmt.Sprintf(`if [ -d "%s/#{hook_session_name}" ]; then git -C "%s/#{hook_session_name}" worktree remove --force "%s/#{hook_session_name}"; fi`, worktreesDir, worktreesDir, worktreesDir)
-	log.Printf("[tmux] Registering global session-closed[99] hook to clean up worktrees in: %s", worktreesDir)
-	res, err := c.runner.Run("tmux", "set-hook", "-g", "session-closed[99]", fmt.Sprintf("run-shell '%s'", cmd))
+// SetupHook registers a hook in Tmux.
+func (c *Client) SetupHook(global bool, target, name, command string) error {
+	args := []string{"set-hook"}
+	if global {
+		args = append(args, "-g")
+	}
+	if target != "" {
+		args = append(args, "-t", target)
+	}
+	args = append(args, name, command)
+
+	res, err := c.runner.Run("tmux", args...)
 	if err != nil {
 		if strings.Contains(res.Stderr, "no server running") || strings.Contains(res.Stderr, "error connecting to") {
-			log.Printf("[tmux] Skipping global hook setup: tmux server not running")
+			log.Printf("[tmux] Skipping hook setup: tmux server not running")
 			return nil
 		}
-		return fmt.Errorf("failed to set global session-closed hook: %s: %w", strings.TrimSpace(res.Stderr), err)
+		return fmt.Errorf("failed to set hook: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
 	return nil
 }
