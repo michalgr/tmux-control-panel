@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"tmux-control-panel/git"
 	"tmux-control-panel/tmux"
+	"tmux-control-panel/worktree"
 )
 
 type ViewState interface {
@@ -97,12 +98,13 @@ type Model struct {
 	// Clients
 	tmuxClient *tmux.Client
 	gitClient  *git.Client
+	wtManager  *worktree.Manager
 
 	// Logger
 	logger *log.Logger
 }
 
-func NewModel(logger *log.Logger, tmuxClient *tmux.Client, gitClient *git.Client) (Model, error) {
+func NewModel(logger *log.Logger, tmuxClient *tmux.Client, gitClient *git.Client, wtManager *worktree.Manager) (Model, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return Model{}, fmt.Errorf("failed to get current working directory: %w", err)
@@ -114,6 +116,7 @@ func NewModel(logger *log.Logger, tmuxClient *tmux.Client, gitClient *git.Client
 		cwd:           cwd,
 		tmuxClient:    tmuxClient,
 		gitClient:     gitClient,
+		wtManager:     wtManager,
 		logger:        logger,
 	}, nil
 }
@@ -696,18 +699,10 @@ func (s CreateWorktreeSessionNameState) handleEnter(m *Model) (ViewState, tea.Cm
 		return s, nil
 	}
 	worktreePath := resolveWorktreePath(val)
-	m.logger.Printf("Creating git worktree at %s, branch %s, session %s", worktreePath, s.branch, val)
+	m.logger.Printf("Creating git worktree session via WorktreeManager: session=%s, branch=%s, path=%s", val, s.branch, worktreePath)
 
-	err := m.gitClient.CreateWorktree(m.cwd, s.branch, worktreePath, s.createBranch)
+	err := m.wtManager.CreateWorktreeSession(m.cwd, s.branch, val, worktreePath, s.createBranch)
 	if err != nil {
-		return ErrorState{err: err.Error()}, nil
-	}
-
-	err = m.tmuxClient.CreateWorktreeSession(val, worktreePath)
-	if err != nil {
-		if errRm := m.gitClient.RemoveWorktree(m.cwd, worktreePath); errRm != nil {
-			m.logger.Printf("Failed to remove worktree path %s: %v", worktreePath, errRm)
-		}
 		return ErrorState{err: err.Error()}, nil
 	}
 

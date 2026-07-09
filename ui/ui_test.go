@@ -10,6 +10,7 @@ import (
 	"tmux-control-panel/git"
 	"tmux-control-panel/run"
 	"tmux-control-panel/tmux"
+	"tmux-control-panel/worktree"
 )
 
 func TestViewStateTransition(t *testing.T) {
@@ -19,8 +20,9 @@ func TestViewStateTransition(t *testing.T) {
 	})
 	tmuxClient := tmux.NewClient(mockRunner)
 	gitClient := git.NewClient(mockRunner)
+	wtManager := worktree.NewManager(gitClient, tmuxClient, "/tmp/worktrees")
 
-	model, err := NewModel(logger, tmuxClient, gitClient)
+	model, err := NewModel(logger, tmuxClient, gitClient, wtManager)
 	if err != nil {
 		t.Fatalf("failed to create model: %v", err)
 	}
@@ -67,8 +69,9 @@ func TestSidebarView_StatusLine(t *testing.T) {
 	})
 	tmuxClient := tmux.NewClient(mockRunner)
 	gitClient := git.NewClient(mockRunner)
+	wtManager := worktree.NewManager(gitClient, tmuxClient, "/tmp/worktrees")
 
-	model, err := NewModel(logger, tmuxClient, gitClient)
+	model, err := NewModel(logger, tmuxClient, gitClient, wtManager)
 	if err != nil {
 		t.Fatalf("failed to create model: %v", err)
 	}

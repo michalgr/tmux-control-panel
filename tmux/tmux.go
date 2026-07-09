@@ -61,20 +61,14 @@ func (c *Client) ListSessions() ([]Session, error) {
 	if err := c.populateActiveWindows(sessionMap); err != nil {
 		return nil, err
 	}
-	if err := c.populateWorktreePaths(sessions); err != nil {
-		return nil, err
-	}
-	if err := c.populateStatusLines(sessions); err != nil {
-		return nil, err
-	}
 
 	return sessions, nil
 }
 
 func (c *Client) fetchSessions() ([]Session, error) {
-	res, err := c.runner.Run("tmux", "list-sessions", "-F", "#{session_name};#{session_windows};#{session_attached};#{session_created};#{session_path}")
+	res, err := c.runner.Run("tmux", "list-sessions", "-F", "#{session_name};#{session_windows};#{session_attached};#{session_created};#{session_path};#{@worktree_path};#{@status_line}")
 	if err != nil {
-		if strings.Contains(res.Stderr, "no server running") {
+		if strings.Contains(res.Stderr, "no server running") || strings.Contains(res.Stderr, "error connecting to") {
 			return nil, ErrNoServer
 		}
 		return nil, fmt.Errorf("failed to list sessions: %s: %w", strings.TrimSpace(res.Stderr), err)
@@ -104,34 +98,6 @@ func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
 	return nil
 }
 
-func (c *Client) populateWorktreePaths(sessions []Session) error {
-	for i := range sessions {
-		sess := &sessions[i]
-		res, err := c.runner.Run("tmux", "show-options", "-q", "-t", sess.Name, "-v", "@worktree_path")
-		if err != nil {
-			return fmt.Errorf("failed to query worktree path for session %s: %s: %w", sess.Name, strings.TrimSpace(res.Stderr), err)
-		}
-		path := strings.TrimSpace(res.Stdout)
-		if path != "" {
-			sess.WorktreePath = path
-		}
-	}
-	return nil
-}
-
-func (c *Client) populateStatusLines(sessions []Session) error {
-	for i := range sessions {
-		sess := &sessions[i]
-		res, err := c.runner.Run("tmux", "show-options", "-q", "-t", sess.Name, "-v", "@status_line")
-		if err != nil {
-			return fmt.Errorf("failed to query status line for session %s: %s: %w", sess.Name, strings.TrimSpace(res.Stderr), err)
-		}
-		status := strings.TrimSpace(res.Stdout)
-		sess.StatusLine = status
-	}
-	return nil
-}
-
 // parseSession parses a Session struct out of a raw list-sessions format line.
 func parseSession(line string) (Session, bool) {
 	line = strings.TrimSpace(line)
@@ -149,12 +115,24 @@ func parseSession(line string) (Session, bool) {
 	createdUnix, _ := strconv.ParseInt(parts[3], 10, 64)
 	path := parts[4]
 
+	var worktreePath string
+	if len(parts) > 5 {
+		worktreePath = parts[5]
+	}
+
+	var statusLine string
+	if len(parts) > 6 {
+		statusLine = parts[6]
+	}
+
 	return Session{
-		Name:     name,
-		Windows:  windows,
-		Attached: attached,
-		Created:  time.Unix(createdUnix, 0),
-		Path:     path,
+		Name:         name,
+		Windows:      windows,
+		Attached:     attached,
+		Created:      time.Unix(createdUnix, 0),
+		Path:         path,
+		WorktreePath: worktreePath,
+		StatusLine:   statusLine,
 	}, true
 }
 
@@ -190,26 +168,11 @@ func (c *Client) CreateSession(name, path string) error {
 	return nil
 }
 
-// CreateWorktreeSession launches a tmux session rooted at the given worktree path
-// and sets the @worktree_path user option on the session to support worktree metadata queries.
-func (c *Client) CreateWorktreeSession(name, worktreePath string) error {
-	res, err := c.runner.Run("tmux", "new-session", "-d", "-s", name, "-c", worktreePath)
+// SetSessionOption sets a session-specific option in Tmux.
+func (c *Client) SetSessionOption(sessionName, option, value string) error {
+	res, err := c.runner.Run("tmux", "set-option", "-t", sessionName, option, value)
 	if err != nil {
-		return fmt.Errorf("failed to start tmux session in worktree: %s: %w", strings.TrimSpace(res.Stderr), err)
-	}
-
-	return c.setWorktreeMetadata(name, worktreePath)
-}
-
-func (c *Client) setWorktreeMetadata(name, worktreePath string) error {
-	log.Printf("[tmux] Setting @worktree_path option for session %s to: %s", name, worktreePath)
-	res, err := c.runner.Run("tmux", "set-option", "-t", name, "@worktree_path", worktreePath)
-	if err != nil {
-		log.Printf("[tmux] Failed to set @worktree_path option: %v", err)
-		if _, errKill := c.runner.Run("tmux", "kill-session", "-t", name); errKill != nil {
-			log.Printf("[tmux] Failed to kill session %s during metadata setup failure: %v", name, errKill)
-		}
-		return fmt.Errorf("failed to set tmux worktree metadata: %s: %w", strings.TrimSpace(res.Stderr), err)
+		return fmt.Errorf("failed to set tmux option: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
 	return nil
 }
@@ -240,7 +203,20 @@ func (c *Client) SetupGlobalClosedHook(worktreesDir string) error {
 	log.Printf("[tmux] Registering global session-closed[99] hook to clean up worktrees in: %s", worktreesDir)
 	res, err := c.runner.Run("tmux", "set-hook", "-g", "session-closed[99]", fmt.Sprintf("run-shell '%s'", cmd))
 	if err != nil {
+		if strings.Contains(res.Stderr, "no server running") || strings.Contains(res.Stderr, "error connecting to") {
+			log.Printf("[tmux] Skipping global hook setup: tmux server not running")
+			return nil
+		}
 		return fmt.Errorf("failed to set global session-closed hook: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
 	return nil
+}
+
+// GetSessionOption queries a session-specific option from Tmux.
+func (c *Client) GetSessionOption(sessionName, option string) (string, error) {
+	res, err := c.runner.Run("tmux", "show-options", "-q", "-t", sessionName, "-v", option)
+	if err != nil {
+		return "", fmt.Errorf("failed to get tmux option: %s: %w", strings.TrimSpace(res.Stderr), err)
+	}
+	return strings.TrimSpace(res.Stdout), nil
 }

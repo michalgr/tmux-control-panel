@@ -11,6 +11,7 @@ import (
 	"tmux-control-panel/run"
 	"tmux-control-panel/tmux"
 	"tmux-control-panel/ui"
+	"tmux-control-panel/worktree"
 )
 
 func main() {
@@ -27,11 +28,9 @@ func main() {
 		logger.Printf("Failed to create worktrees directory: %v\n", err)
 	}
 
-	if err := tmuxClient.SetupGlobalClosedHook(worktreesDir); err != nil {
-		logger.Printf("Failed to setup global tmux closed hook: %v\n", err)
-	}
+	wtManager := worktree.NewManager(gitClient, tmuxClient, worktreesDir)
 
-	m := initModel(logger, tmuxClient, gitClient)
+	m := initModel(logger, tmuxClient, gitClient, wtManager)
 	runProgram(m, logger)
 }
 
@@ -47,8 +46,8 @@ func verifyTmuxInstalled(c *tmux.Client) {
 	}
 }
 
-func initModel(logger *log.Logger, tc *tmux.Client, gc *git.Client) ui.Model {
-	m, err := ui.NewModel(logger, tc, gc)
+func initModel(logger *log.Logger, tc *tmux.Client, gc *git.Client, wt *worktree.Manager) ui.Model {
+	m, err := ui.NewModel(logger, tc, gc, wt)
 	if err != nil {
 		logger.Printf("Failed to initialize model: %v\n", err)
 		fmt.Fprintf(os.Stderr, "Error initializing TUI model: %v\n", err)
