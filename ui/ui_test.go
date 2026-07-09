@@ -81,14 +81,14 @@ func TestSidebarView_StatusLine(t *testing.T) {
 		{
 			Name:           "session-with-status",
 			Windows:        3,
-			ActivePaneName: "main-pane",
+			ActivePaneName: "nvim",
 			Attached:       true,
 			StatusLine:     "Agent is busy writing code",
 		},
 		{
 			Name:           "session-no-status",
 			Windows:        1,
-			ActivePaneName: "zsh-pane",
+			ActivePaneName: "zsh",
 			Attached:       false,
 			StatusLine:     "",
 		},
@@ -106,11 +106,11 @@ func TestSidebarView_StatusLine(t *testing.T) {
 	if !strings.Contains(view, "no status set") {
 		t.Errorf("expected view to contain fallback 'no status set', got:\n%s", view)
 	}
-	if !strings.Contains(view, "main-pane") {
-		t.Errorf("expected view to contain active pane name 'main-pane', got:\n%s", view)
+	if !strings.Contains(view, "nvim") {
+		t.Errorf("expected view to contain active pane name 'nvim', got:\n%s", view)
 	}
-	if !strings.Contains(view, "zsh-pane") {
-		t.Errorf("expected view to contain active pane name 'zsh-pane', got:\n%s", view)
+	if !strings.Contains(view, "zsh") {
+		t.Errorf("expected view to contain active pane name 'zsh', got:\n%s", view)
 	}
 }
 

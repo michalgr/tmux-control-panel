@@ -18,7 +18,7 @@ func TestListSessions(t *testing.T) {
 				}, nil
 			case "list-windows":
 				return run.CommandResult{
-					Stdout: "my-session;main-win;1;my-pane\nmy-session;other-win;0;other-pane\n",
+					Stdout: "my-session;main-win;1;zsh\nmy-session;other-win;0;nvim\n",
 				}, nil
 			}
 		}
@@ -51,8 +51,8 @@ func TestListSessions(t *testing.T) {
 	if sess.ActiveWindowName != "main-win" {
 		t.Errorf("expected active window name 'main-win', got %q", sess.ActiveWindowName)
 	}
-	if sess.ActivePaneName != "my-pane" {
-		t.Errorf("expected active pane name 'my-pane', got %q", sess.ActivePaneName)
+	if sess.ActivePaneName != "zsh" {
+		t.Errorf("expected active pane name 'zsh', got %q", sess.ActivePaneName)
 	}
 	if sess.WorktreePath != "/some/worktree" {
 		t.Errorf("expected worktree path '/some/worktree', got %q", sess.WorktreePath)
@@ -209,7 +209,7 @@ func TestListSessions_EmptyAndError(t *testing.T) {
 					}, nil
 				case "list-windows":
 					return run.CommandResult{
-						Stdout: "my-session;main-win;1;my-pane\nmy-session;other-win;0;other-pane\n",
+						Stdout: "my-session;main-win;1;zsh\nmy-session;other-win;0;nvim\n",
 					}, nil
 				}
 			}

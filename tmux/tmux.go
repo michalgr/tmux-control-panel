@@ -86,7 +86,7 @@ func (c *Client) fetchSessions() ([]Session, error) {
 }
 
 func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
-	res, err := c.runner.Run("tmux", "list-windows", "-a", "-F", "#{session_name};#{window_name};#{window_active};#{pane_title}")
+	res, err := c.runner.Run("tmux", "list-windows", "-a", "-F", "#{session_name};#{window_name};#{window_active};#{pane_current_command}")
 	if err != nil {
 		return fmt.Errorf("failed to list windows: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
@@ -94,7 +94,7 @@ func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
 		if win, ok := parseWindowInfo(line); ok && win.active {
 			if sess, ok := sessionMap[win.sessionName]; ok {
 				sess.ActiveWindowName = win.windowName
-				sess.ActivePaneName = win.paneTitle
+				sess.ActivePaneName = win.paneCommand
 			}
 		}
 	}
@@ -144,7 +144,7 @@ type windowInfo struct {
 	sessionName string
 	windowName  string
 	active      bool
-	paneTitle   string
+	paneCommand string
 }
 
 // parseWindowInfo parses window metadata from a raw list-windows format line.
@@ -161,7 +161,7 @@ func parseWindowInfo(line string) (windowInfo, bool) {
 		sessionName: parts[0],
 		windowName:  parts[1],
 		active:      parts[2] == "1",
-		paneTitle:   parts[3],
+		paneCommand: parts[3],
 	}, true
 }
 
