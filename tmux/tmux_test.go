@@ -461,3 +461,28 @@ func TestCurrentSessionName(t *testing.T) {
 		}
 	})
 }
+
+func TestSwitchClient(t *testing.T) {
+	var calledCommands [][]string
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		calledCommands = append(calledCommands, append([]string{name}, args...))
+		return run.CommandResult{}, nil
+	})
+
+	c := NewClient(mock)
+	err := c.SwitchClient("target-session")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(calledCommands) != 1 {
+		t.Fatalf("expected 1 command, got %d", len(calledCommands))
+	}
+
+	expected := []string{"tmux", "switch-client", "-t", "target-session"}
+	for i, val := range expected {
+		if calledCommands[0][i] != val {
+			t.Errorf("arg %d mismatch: expected %q, got %q", i, val, calledCommands[0][i])
+		}
+	}
+}

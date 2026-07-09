@@ -217,8 +217,7 @@ func (m *Model) attachOrSwitchSession() tea.Cmd {
 
 	if os.Getenv("TMUX") != "" {
 		m.logger.Printf("Inside tmux. Switching client to session: %s", sessName)
-		c := exec.Command("tmux", "switch-client", "-t", sessName)
-		if err := c.Run(); err != nil {
+		if err := m.tmuxClient.SwitchClient(sessName); err != nil {
 			return func() tea.Msg { return err }
 		}
 		return tea.Quit

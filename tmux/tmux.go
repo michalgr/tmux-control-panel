@@ -244,3 +244,12 @@ func (c *Client) CurrentSessionName() (string, error) {
 	}
 	return strings.TrimSpace(res.Stdout), nil
 }
+
+// SwitchClient switches the active client to the target session name.
+func (c *Client) SwitchClient(name string) error {
+	res, err := c.runner.Run("tmux", "switch-client", "-t", name)
+	if err != nil {
+		return fmt.Errorf("failed to switch client: %s: %w", strings.TrimSpace(res.Stderr), err)
+	}
+	return nil
+}
