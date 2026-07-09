@@ -32,32 +32,53 @@ func (m Model) sidebarView(width, height int) string {
 }
 
 func renderSidebarItem(sess tmux.Session, isSelected bool, width int) string {
-	prefix := formatStatusPrefix(sess.Attached) + " "
-	wtTag := formatWorktreeTag(sess.WorktreePath != "")
-	itemText := fmt.Sprintf("%s%s (%dw)%s", prefix, sess.Name, sess.Windows, wtTag)
-
-	if !isSelected {
-		return normalItemStyle.Render(itemText)
-	}
-	return selectedItemStyle.Render(padItemText(itemText, width))
+	line1, line2 := formatSidebarItem(sess, width)
+	return styleSidebarItem(line1, line2, isSelected)
 }
 
-func formatStatusPrefix(attached bool) string {
-	if attached {
-		return lipgloss.NewStyle().Foreground(cyanCol).Bold(true).Render("●")
+func formatSidebarItem(sess tmux.Session, width int) (string, string) {
+	prefix := "○"
+	if sess.Attached {
+		prefix = "●"
 	}
-	return lipgloss.NewStyle().Foreground(slateCol).Render("○")
+	line1 := fmt.Sprintf("%s %s (%dw)", prefix, sess.Name, sess.Windows)
+	line2 := getStatusLine(sess, width)
+
+	return padToWidth(line1, width-2), padToWidth(line2, width-2)
 }
 
-func formatWorktreeTag(hasWorktree bool) string {
-	if hasWorktree {
-		return lipgloss.NewStyle().Foreground(greenCol).Render(" [wt]")
+func styleSidebarItem(line1, line2 string, isSelected bool) string {
+	var style1, style2 lipgloss.Style
+	if isSelected {
+		style1 = selectedItemStyle
+		style2 = lipgloss.NewStyle().Background(violetCol).Foreground(lipgloss.Color("#E0D8FF"))
+	} else {
+		style1 = normalItemStyle
+		style2 = lipgloss.NewStyle().Foreground(slateCol)
 	}
-	return ""
+	return style1.Render(line1) + "\n" + style2.Render(line2)
 }
 
-func padItemText(text string, width int) string {
-	padLen := width - lipgloss.Width(text) - 2
+func getStatusLine(sess tmux.Session, width int) string {
+	statusText := sess.StatusLine
+	if statusText == "" {
+		statusText = "no status set"
+	}
+	line2 := "  " + statusText
+
+	maxTextWidth := width - 2
+	if maxTextWidth < 0 {
+		maxTextWidth = 0
+	}
+	runes := []rune(line2)
+	if len(runes) > maxTextWidth {
+		line2 = string(runes[:maxTextWidth])
+	}
+	return line2
+}
+
+func padToWidth(text string, targetWidth int) string {
+	padLen := targetWidth - lipgloss.Width(text)
 	if padLen < 0 {
 		padLen = 0
 	}

@@ -42,12 +42,18 @@ func appendBasicMetadata(lines []string, sess tmux.Session) []string {
 		actWin = "unknown"
 	}
 
+	agentStatus := sess.StatusLine
+	if agentStatus == "" {
+		agentStatus = "none"
+	}
+
 	uptime := formatUptime(sess.Created)
 	return append(lines,
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Session Name:"), metaValueStyle.Render(sess.Name)),
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Status:      "), statusStr),
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Windows:     "), metaValueStyle.Render(fmt.Sprintf("%d", sess.Windows))),
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Active Win:  "), metaValueStyle.Render(actWin)),
+		fmt.Sprintf("%s %s", metaLabelStyle.Render("Agent Status:"), metaValueStyle.Render(agentStatus)),
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Directory:   "), metaValueStyle.Render(sess.Path)),
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Created At:  "), metaValueStyle.Render(sess.Created.Format("2006-01-02 15:04:05"))),
 		fmt.Sprintf("%s %s", metaLabelStyle.Render("Uptime:      "), metaValueStyle.Render(uptime)),

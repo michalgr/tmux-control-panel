@@ -21,10 +21,17 @@ func TestListSessions(t *testing.T) {
 					Stdout: "my-session;main-win;1\nmy-session;other-win;0\n",
 				}, nil
 			case "show-options":
-				if len(args) >= 6 && args[1] == "-q" && args[2] == "-t" && args[3] == "my-session" && args[4] == "-v" && args[5] == "@worktree_path" {
-					return run.CommandResult{
-						Stdout: "/some/worktree\n",
-					}, nil
+				if len(args) >= 6 && args[1] == "-q" && args[2] == "-t" && args[3] == "my-session" && args[4] == "-v" {
+					if args[5] == "@worktree_path" {
+						return run.CommandResult{
+							Stdout: "/some/worktree\n",
+						}, nil
+					}
+					if args[5] == "@status_line" {
+						return run.CommandResult{
+							Stdout: "running build\n",
+						}, nil
+					}
 				}
 				return run.CommandResult{}, errors.New("unexpected show-options args")
 			}
@@ -60,6 +67,9 @@ func TestListSessions(t *testing.T) {
 	}
 	if sess.WorktreePath != "/some/worktree" {
 		t.Errorf("expected worktree path '/some/worktree', got %q", sess.WorktreePath)
+	}
+	if sess.StatusLine != "running build" {
+		t.Errorf("expected status line 'running build', got %q", sess.StatusLine)
 	}
 
 	expectedTime := time.Unix(1609459200, 0)

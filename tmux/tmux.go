@@ -21,6 +21,7 @@ type Session struct {
 	Path             string
 	WorktreePath     string
 	ActiveWindowName string
+	StatusLine       string
 }
 
 // ErrNoServer is returned when tmux server is not running.
@@ -61,6 +62,9 @@ func (c *Client) ListSessions() ([]Session, error) {
 		return nil, err
 	}
 	if err := c.populateWorktreePaths(sessions); err != nil {
+		return nil, err
+	}
+	if err := c.populateStatusLines(sessions); err != nil {
 		return nil, err
 	}
 
@@ -111,6 +115,19 @@ func (c *Client) populateWorktreePaths(sessions []Session) error {
 		if path != "" {
 			sess.WorktreePath = path
 		}
+	}
+	return nil
+}
+
+func (c *Client) populateStatusLines(sessions []Session) error {
+	for i := range sessions {
+		sess := &sessions[i]
+		res, err := c.runner.Run("tmux", "show-options", "-q", "-t", sess.Name, "-v", "@status_line")
+		if err != nil {
+			return fmt.Errorf("failed to query status line for session %s: %s: %w", sess.Name, strings.TrimSpace(res.Stderr), err)
+		}
+		status := strings.TrimSpace(res.Stdout)
+		sess.StatusLine = status
 	}
 	return nil
 }
