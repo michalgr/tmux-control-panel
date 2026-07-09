@@ -237,3 +237,71 @@ func TestInitialSelection_CurrentActiveSession(t *testing.T) {
 		}
 	})
 }
+
+func TestSessionNameValidation(t *testing.T) {
+	logger := log.New(io.Discard, "", 0)
+	mockRunner := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		return run.CommandResult{}, nil
+	})
+	tmuxClient := tmux.NewClient(mockRunner)
+	gitClient := git.NewClient(mockRunner)
+	wtManager := worktree.NewManager(gitClient, tmuxClient, "/tmp/worktrees")
+
+	model, err := NewModel(logger, tmuxClient, gitClient, wtManager)
+	if err != nil {
+		t.Fatalf("failed to create model: %v", err)
+	}
+
+	tests := []struct {
+		input      string
+		expectedOk bool
+	}{
+		{"valid-name_123", true},
+		{"invalid name", false},
+		{"invalid;inject", false},
+		{"invalid/slash", false},
+		{"invalid.dot", false},
+		{"invalid:colon", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			// Test CreateSessionNameState
+			nameState := CreateSessionNameState{}
+			nameState.textInput.SetValue(tc.input)
+			nextState, _ := nameState.Update(&model, tea.KeyMsg{Type: tea.KeyEnter})
+
+			if tc.expectedOk {
+				if _, ok := nextState.(CreateSessionPathState); !ok {
+					t.Errorf("expected transition to CreateSessionPathState for %q, got %T", tc.input, nextState)
+				}
+			} else {
+				errState, ok := nextState.(ErrorState)
+				if !ok {
+					t.Errorf("expected transition to ErrorState for %q, got %T", tc.input, nextState)
+				} else if !strings.Contains(errState.err, "Invalid session name") {
+					t.Errorf("expected error message to contain 'Invalid session name', got %q", errState.err)
+				}
+			}
+
+			// Test CreateWorktreeSessionNameState
+			wtNameState := CreateWorktreeSessionNameState{}
+			wtNameState.textInput.SetValue(tc.input)
+			nextWtState, _ := wtNameState.Update(&model, tea.KeyMsg{Type: tea.KeyEnter})
+
+			if tc.expectedOk {
+				// Success transitions past name check (might fail on directory setup, but shouldn't remain ErrorState due to validation)
+				if _, ok := nextWtState.(ErrorState); ok {
+					t.Errorf("expected success or non-validation error for %q, got ErrorState", tc.input)
+				}
+			} else {
+				errState, ok := nextWtState.(ErrorState)
+				if !ok {
+					t.Errorf("expected transition to ErrorState for %q, got %T", tc.input, nextWtState)
+				} else if !strings.Contains(errState.err, "Invalid session name") {
+					t.Errorf("expected error message to contain 'Invalid session name', got %q", errState.err)
+				}
+			}
+		})
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,12 @@ import (
 	"tmux-control-panel/tmux"
 	"tmux-control-panel/worktree"
 )
+
+var sessionNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func isValidSessionName(name string) bool {
+	return sessionNameRegex.MatchString(name)
+}
 
 type ViewState interface {
 	View(m *Model, width, height int) string
@@ -492,6 +499,9 @@ func (s CreateSessionNameState) handleEnter(m *Model) (ViewState, tea.Cmd) {
 	if val == "" {
 		return s, nil
 	}
+	if !isValidSessionName(val) {
+		return ErrorState{err: "Invalid session name. Only alphanumeric, hyphens, and underscores are allowed."}, nil
+	}
 	ti := textinput.New()
 	ti.Focus()
 	ti.CharLimit = 156
@@ -714,6 +724,9 @@ func (s CreateWorktreeSessionNameState) handleEnter(m *Model) (ViewState, tea.Cm
 	val := strings.TrimSpace(s.textInput.Value())
 	if val == "" {
 		return s, nil
+	}
+	if !isValidSessionName(val) {
+		return ErrorState{err: "Invalid session name. Only alphanumeric, hyphens, and underscores are allowed."}, nil
 	}
 	worktreePath := resolveWorktreePath(val)
 	m.logger.Printf("Creating git worktree session via WorktreeManager: session=%s, branch=%s, path=%s", val, s.branch, worktreePath)
