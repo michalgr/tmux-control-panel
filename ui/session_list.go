@@ -41,7 +41,11 @@ func formatSidebarItem(sess tmux.Session, width int) (string, string) {
 	if sess.Attached {
 		prefix = "●"
 	}
-	line1 := fmt.Sprintf("%s %s (%dw)", prefix, sess.Name, sess.Windows)
+	actPane := sess.ActivePaneName
+	if actPane == "" {
+		actPane = "unknown"
+	}
+	line1 := fmt.Sprintf("%s %s (%s)", prefix, sess.Name, actPane)
 	line2 := getStatusLine(sess, width)
 
 	return padToWidth(line1, width-2), padToWidth(line2, width-2)

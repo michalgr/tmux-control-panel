@@ -78,16 +78,18 @@ func TestSidebarView_StatusLine(t *testing.T) {
 
 	model.sessions = []tmux.Session{
 		{
-			Name:       "session-with-status",
-			Windows:    3,
-			Attached:   true,
-			StatusLine: "Agent is busy writing code",
+			Name:           "session-with-status",
+			Windows:        3,
+			ActivePaneName: "main-pane",
+			Attached:       true,
+			StatusLine:     "Agent is busy writing code",
 		},
 		{
-			Name:       "session-no-status",
-			Windows:    1,
-			Attached:   false,
-			StatusLine: "",
+			Name:           "session-no-status",
+			Windows:        1,
+			ActivePaneName: "zsh-pane",
+			Attached:       false,
+			StatusLine:     "",
 		},
 	}
 	model.selectedIndex = 0
@@ -102,6 +104,12 @@ func TestSidebarView_StatusLine(t *testing.T) {
 	}
 	if !strings.Contains(view, "no status set") {
 		t.Errorf("expected view to contain fallback 'no status set', got:\n%s", view)
+	}
+	if !strings.Contains(view, "main-pane") {
+		t.Errorf("expected view to contain active pane name 'main-pane', got:\n%s", view)
+	}
+	if !strings.Contains(view, "zsh-pane") {
+		t.Errorf("expected view to contain active pane name 'zsh-pane', got:\n%s", view)
 	}
 }
 

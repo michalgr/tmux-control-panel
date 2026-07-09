@@ -32,32 +32,39 @@ func (m *Model) detailPaneView(width, height int) string {
 }
 
 func appendBasicMetadata(lines []string, sess tmux.Session) []string {
-	statusStr := lipgloss.NewStyle().Foreground(slateCol).Render("Detached")
-	if sess.Attached {
-		statusStr = lipgloss.NewStyle().Foreground(cyanCol).Bold(true).Render("Attached")
-	}
-
-	actWin := sess.ActiveWindowName
-	if actWin == "" {
-		actWin = "unknown"
-	}
-
-	agentStatus := sess.StatusLine
-	if agentStatus == "" {
-		agentStatus = "none"
-	}
-
+	statusStr := renderStatus(sess.Attached)
+	actWin := fallbackVal(sess.ActiveWindowName, "unknown")
+	agentStatus := fallbackVal(sess.StatusLine, "none")
 	uptime := formatUptime(sess.Created)
+
 	return append(lines,
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Session Name:"), metaValueStyle.Render(sess.Name)),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Status:      "), statusStr),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Windows:     "), metaValueStyle.Render(fmt.Sprintf("%d", sess.Windows))),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Active Win:  "), metaValueStyle.Render(actWin)),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Agent Status:"), metaValueStyle.Render(agentStatus)),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Directory:   "), metaValueStyle.Render(sess.Path)),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Created At:  "), metaValueStyle.Render(sess.Created.Format("2006-01-02 15:04:05"))),
-		fmt.Sprintf("%s %s", metaLabelStyle.Render("Uptime:      "), metaValueStyle.Render(uptime)),
+		renderMetaLine("Session Name:", sess.Name),
+		renderMetaLine("Status:      ", statusStr),
+		renderMetaLine("Windows:     ", fmt.Sprintf("%d", sess.Windows)),
+		renderMetaLine("Active Win:  ", actWin),
+		renderMetaLine("Agent Status:", agentStatus),
+		renderMetaLine("Directory:   ", sess.Path),
+		renderMetaLine("Created At:  ", sess.Created.Format("2006-01-02 15:04:05")),
+		renderMetaLine("Uptime:      ", uptime),
 	)
+}
+
+func renderStatus(attached bool) string {
+	if attached {
+		return lipgloss.NewStyle().Foreground(cyanCol).Bold(true).Render("Attached")
+	}
+	return lipgloss.NewStyle().Foreground(slateCol).Render("Detached")
+}
+
+func fallbackVal(val, fallback string) string {
+	if val == "" {
+		return fallback
+	}
+	return val
+}
+
+func renderMetaLine(label, val string) string {
+	return fmt.Sprintf("%s %s", metaLabelStyle.Render(label), metaValueStyle.Render(val))
 }
 
 func (m *Model) appendGitStatus(lines []string, path string) []string {

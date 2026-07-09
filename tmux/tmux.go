@@ -21,6 +21,7 @@ type Session struct {
 	Path             string
 	WorktreePath     string
 	ActiveWindowName string
+	ActivePaneName   string
 	StatusLine       string
 }
 
@@ -84,7 +85,7 @@ func (c *Client) fetchSessions() ([]Session, error) {
 }
 
 func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
-	res, err := c.runner.Run("tmux", "list-windows", "-a", "-F", "#{session_name};#{window_name};#{window_active}")
+	res, err := c.runner.Run("tmux", "list-windows", "-a", "-F", "#{session_name};#{window_name};#{window_active};#{pane_title}")
 	if err != nil {
 		return fmt.Errorf("failed to list windows: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
@@ -92,6 +93,7 @@ func (c *Client) populateActiveWindows(sessionMap map[string]*Session) error {
 		if win, ok := parseWindowInfo(line); ok && win.active {
 			if sess, ok := sessionMap[win.sessionName]; ok {
 				sess.ActiveWindowName = win.windowName
+				sess.ActivePaneName = win.paneTitle
 			}
 		}
 	}
@@ -108,12 +110,13 @@ func parseSession(line string) (Session, bool) {
 	if len(parts) < 5 {
 		return Session{}, false
 	}
+	return buildSessionFromParts(parts), true
+}
 
-	name := parts[0]
+func buildSessionFromParts(parts []string) Session {
 	windows, _ := strconv.Atoi(parts[1])
 	attached := parts[2] != "0"
 	createdUnix, _ := strconv.ParseInt(parts[3], 10, 64)
-	path := parts[4]
 
 	var worktreePath string
 	if len(parts) > 5 {
@@ -126,20 +129,21 @@ func parseSession(line string) (Session, bool) {
 	}
 
 	return Session{
-		Name:         name,
+		Name:         parts[0],
 		Windows:      windows,
 		Attached:     attached,
 		Created:      time.Unix(createdUnix, 0),
-		Path:         path,
+		Path:         parts[4],
 		WorktreePath: worktreePath,
 		StatusLine:   statusLine,
-	}, true
+	}
 }
 
 type windowInfo struct {
 	sessionName string
 	windowName  string
 	active      bool
+	paneTitle   string
 }
 
 // parseWindowInfo parses window metadata from a raw list-windows format line.
@@ -149,13 +153,14 @@ func parseWindowInfo(line string) (windowInfo, bool) {
 		return windowInfo{}, false
 	}
 	parts := strings.Split(line, ";")
-	if len(parts) < 3 {
+	if len(parts) < 4 {
 		return windowInfo{}, false
 	}
 	return windowInfo{
 		sessionName: parts[0],
 		windowName:  parts[1],
 		active:      parts[2] == "1",
+		paneTitle:   parts[3],
 	}, true
 }
 
