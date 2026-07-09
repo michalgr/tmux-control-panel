@@ -168,24 +168,24 @@ func parseWindowInfo(line string) (windowInfo, bool) {
 
 // parseHookForWorktree parses a session-closed hook to extract the Git worktree path.
 func parseHookForWorktree(line string) (string, bool) {
-	if strings.Contains(line, "session-closed") && strings.Contains(line, "git worktree remove") {
+	if strings.Contains(line, "session-closed") && strings.Contains(line, "worktree remove") {
 		return parseWorktreePathFromHook(line), true
 	}
 	return "", false
 }
 
 // parseWorktreePathFromHook extracts the path from a hook command like:
-// session-closed[...] run-shell "git worktree remove --force /path/to/worktree"
+// session-closed[...] run-shell "git -C /repo/path worktree remove --force /path/to/worktree"
 func parseWorktreePathFromHook(hookLine string) string {
-	idx := strings.Index(hookLine, "git worktree remove --force ")
+	idx := strings.Index(hookLine, "worktree remove --force ")
 	if idx == -1 {
-		idx = strings.Index(hookLine, "git worktree remove ")
+		idx = strings.Index(hookLine, "worktree remove ")
 		if idx == -1 {
 			return ""
 		}
-		idx += len("git worktree remove ")
+		idx += len("worktree remove ")
 	} else {
-		idx += len("git worktree remove --force ")
+		idx += len("worktree remove --force ")
 	}
 
 	pathPart := hookLine[idx:]
@@ -212,11 +212,11 @@ func (c *Client) CreateWorktreeSession(name, repoPath, branchName, worktreePath 
 		return fmt.Errorf("failed to start tmux session in worktree: %s: %w", strings.TrimSpace(res.Stderr), err)
 	}
 
-	return c.setSessionClosedHook(name, worktreePath)
+	return c.setSessionClosedHook(name, repoPath, worktreePath)
 }
 
-func (c *Client) setSessionClosedHook(name, worktreePath string) error {
-	cleanupCmd := fmt.Sprintf("git worktree remove --force %s", worktreePath)
+func (c *Client) setSessionClosedHook(name, repoPath, worktreePath string) error {
+	cleanupCmd := fmt.Sprintf(`git -C "%s" worktree remove --force "%s"`, repoPath, worktreePath)
 	log.Printf("[tmux] Setting session-closed hook for session %s to remove worktree: %s", name, worktreePath)
 	res, err := c.runner.Run("tmux", "set-hook", "-t", name, "session-closed", fmt.Sprintf("run-shell '%s'", cleanupCmd))
 	if err != nil {

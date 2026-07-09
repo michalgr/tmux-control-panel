@@ -87,3 +87,87 @@ func TestHasSession(t *testing.T) {
 		t.Error("expected HasSession to return false for missing session")
 	}
 }
+
+func TestCreateWorktreeSession(t *testing.T) {
+	var calledCommands [][]string
+	mock := run.NewMockRunner(func(name string, args ...string) (run.CommandResult, error) {
+		cmd := append([]string{name}, args...)
+		calledCommands = append(calledCommands, cmd)
+		return run.CommandResult{}, nil
+	})
+
+	c := NewClient(mock)
+	err := c.CreateWorktreeSession("my-wt-sess", "/my/repo", "my-branch", "/my/wt/path", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(calledCommands) != 2 {
+		t.Fatalf("expected 2 tmux commands, got %d", len(calledCommands))
+	}
+
+	// Verify first command is tmux new-session
+	expectedNewSess := []string{"tmux", "new-session", "-d", "-s", "my-wt-sess", "-c", "/my/wt/path"}
+	for i, val := range expectedNewSess {
+		if calledCommands[0][i] != val {
+			t.Errorf("expected arg %d of first command to be %q, got %q", i, val, calledCommands[0][i])
+		}
+	}
+
+	// Verify second command is tmux set-hook
+	expectedSetHook := []string{
+		"tmux", "set-hook", "-t", "my-wt-sess", "session-closed",
+		`run-shell 'git -C "/my/repo" worktree remove --force "/my/wt/path"'`,
+	}
+	for i, val := range expectedSetHook {
+		if calledCommands[1][i] != val {
+			t.Errorf("expected arg %d of second command to be %q, got %q", i, val, calledCommands[1][i])
+		}
+	}
+}
+
+func TestParseHookForWorktree(t *testing.T) {
+	tests := []struct {
+		name         string
+		line         string
+		expectedPath string
+		expectedOk   bool
+	}{
+		{
+			name:         "Old style with force",
+			line:         "session-closed run-shell 'git worktree remove --force /some/worktree'",
+			expectedPath: "/some/worktree",
+			expectedOk:   true,
+		},
+		{
+			name:         "Old style without force",
+			line:         "session-closed run-shell 'git worktree remove /some/worktree'",
+			expectedPath: "/some/worktree",
+			expectedOk:   true,
+		},
+		{
+			name:         "New style with -C flag and quotes",
+			line:         `session-closed run-shell 'git -C "/repo/path" worktree remove --force "/some/worktree"'`,
+			expectedPath: "/some/worktree",
+			expectedOk:   true,
+		},
+		{
+			name:         "Non-matching hook",
+			line:         "session-closed run-shell 'echo hello'",
+			expectedPath: "",
+			expectedOk:   false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path, ok := parseHookForWorktree(tc.line)
+			if ok != tc.expectedOk {
+				t.Errorf("expected ok to be %t, got %t", tc.expectedOk, ok)
+			}
+			if path != tc.expectedPath {
+				t.Errorf("expected path to be %q, got %q", tc.expectedPath, path)
+			}
+		})
+	}
+}
