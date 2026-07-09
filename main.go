@@ -73,7 +73,7 @@ func initLogging() (*os.File, *log.Logger) {
 		os.Exit(1)
 	}
 	logFilePath := filepath.Join(logDir, "debug.log")
-	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 		os.Exit(1)
