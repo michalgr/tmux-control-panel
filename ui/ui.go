@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -208,11 +209,8 @@ func (m *Model) selectCurrentSession() {
 	if err != nil || currentSessName == "" {
 		return
 	}
-	for i, sess := range m.sessions {
-		if sess.Name == currentSessName {
-			m.selectedIndex = i
-			break
-		}
+	if idx := slices.IndexFunc(m.sessions, func(s tmux.Session) bool { return s.Name == currentSessName }); idx != -1 {
+		m.selectedIndex = idx
 	}
 }
 
@@ -607,13 +605,7 @@ func (s CreateWorktreeBranchState) handleEnter(m *Model) (ViewState, tea.Cmd) {
 	if val == "" {
 		return s, nil
 	}
-	exists := false
-	for _, b := range s.gitBranches {
-		if b == val {
-			exists = true
-			break
-		}
-	}
+	exists := slices.Contains(s.gitBranches, val)
 	ti := textinput.New()
 	ti.Focus()
 	ti.CharLimit = 156
