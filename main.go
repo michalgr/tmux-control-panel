@@ -46,7 +46,7 @@ func verifyTmuxInstalled(c *tmux.Client) {
 	}
 }
 
-func initModel(logger *log.Logger, tc *tmux.Client, gc *git.Client, wt *worktree.Manager) ui.Model {
+func initModel(logger *log.Logger, tc *tmux.Client, gc *git.Client, wt *worktree.Manager) *ui.Model {
 	m, err := ui.NewModel(logger, tc, gc, wt)
 	if err != nil {
 		logger.Printf("Failed to initialize model: %v\n", err)
@@ -56,7 +56,7 @@ func initModel(logger *log.Logger, tc *tmux.Client, gc *git.Client, wt *worktree
 	return m
 }
 
-func runProgram(m ui.Model, logger *log.Logger) {
+func runProgram(m *ui.Model, logger *log.Logger) {
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		logger.Printf("Fatal TUI runtime error: %v\n", err)

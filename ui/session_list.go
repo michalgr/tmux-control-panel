@@ -8,7 +8,7 @@ import (
 	"tmux-control-panel/tmux"
 )
 
-func (m Model) sidebarView(width, height int) string {
+func (m *Model) sidebarView(width, height int) string {
 	var lines []string
 
 	header := lipgloss.NewStyle().

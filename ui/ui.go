@@ -112,13 +112,13 @@ type Model struct {
 	logger *log.Logger
 }
 
-func NewModel(logger *log.Logger, tmuxClient *tmux.Client, gitClient *git.Client, wtManager *worktree.Manager) (Model, error) {
+func NewModel(logger *log.Logger, tmuxClient *tmux.Client, gitClient *git.Client, wtManager *worktree.Manager) (*Model, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return Model{}, fmt.Errorf("failed to get current working directory: %w", err)
+		return nil, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	return Model{
+	return &Model{
 		selectedIndex: 0,
 		state:         NormalState{},
 		cwd:           cwd,
@@ -129,14 +129,14 @@ func NewModel(logger *log.Logger, tmuxClient *tmux.Client, gitClient *git.Client
 	}, nil
 }
 
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.refreshSessionsCmd(),
 		m.tickCmd(),
 	)
 }
 
-func (m Model) refreshSessionsCmd() tea.Cmd {
+func (m *Model) refreshSessionsCmd() tea.Cmd {
 	return func() tea.Msg {
 		sessions, err := m.tmuxClient.ListSessions()
 		if err != nil {
@@ -149,22 +149,22 @@ func (m Model) refreshSessionsCmd() tea.Cmd {
 	}
 }
 
-func (m Model) tickCmd() tea.Cmd {
+func (m *Model) tickCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "ctrl+c" {
 		return m, tea.Quit
 	}
 
-	if cmd, handled := (&m).handleSystemMessage(msg); handled {
+	if cmd, handled := m.handleSystemMessage(msg); handled {
 		return m, cmd
 	}
 
-	nextState, cmd := m.state.Update(&m, msg)
+	nextState, cmd := m.state.Update(m, msg)
 	m.state = nextState
 	return m, cmd
 }
@@ -237,7 +237,7 @@ func (m *Model) attachOrSwitchSession() tea.Cmd {
 	})
 }
 
-func (m Model) View() string {
+func (m *Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Initializing Tmux Control Panel..."
 	}
@@ -263,7 +263,7 @@ func (m Model) View() string {
 	)
 }
 
-func (m Model) getSidebarWidth() int {
+func (m *Model) getSidebarWidth() int {
 	w := m.width / 3
 	if w < 25 {
 		return 25
@@ -275,7 +275,7 @@ func (m *Model) getRightPaneView(width, height int) string {
 	return m.state.View(m, width, height)
 }
 
-func (m Model) headerView() string {
+func (m *Model) headerView() string {
 	title := titleStyle.Render("⚡ TMUX CONTROL PANEL (tmux-cp) ⚡")
 	desc := lipgloss.NewStyle().Foreground(slateCol).Render("Manage sessions & worktrees")
 
@@ -283,7 +283,7 @@ func (m Model) headerView() string {
 	return headerStyle.Width(m.width - 2).Render(header)
 }
 
-func (m Model) footerView() string {
+func (m *Model) footerView() string {
 	keys := []string{
 		"↑/↓,j/k: Navigate",
 		"Enter/a: Attach",

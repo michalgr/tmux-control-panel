@@ -34,7 +34,7 @@ func TestViewStateTransition(t *testing.T) {
 	}
 
 	// 2. Transition to CreateSessionNameState via "n" keypress in NormalState
-	nextState, _ := model.state.Update(&model, tea.KeyMsg{
+	nextState, _ := model.state.Update(model, tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune("n"),
 	})
@@ -49,7 +49,7 @@ func TestViewStateTransition(t *testing.T) {
 	model.state = nameState
 
 	// 3. Hit enter to transition to CreateSessionPathState
-	nextState, _ = model.state.Update(&model, tea.KeyMsg{
+	nextState, _ = model.state.Update(model, tea.KeyMsg{
 		Type: tea.KeyEnter,
 	})
 
@@ -192,7 +192,7 @@ func TestInitialSelection_CurrentActiveSession(t *testing.T) {
 
 		// Send sessions list to simulate first load
 		resModel, _ := model.Update(sessions)
-		model = resModel.(Model)
+		model = resModel.(*Model)
 
 		if model.selectedIndex != 1 {
 			t.Errorf("expected selectedIndex to be 1 (session-2), got %d", model.selectedIndex)
@@ -204,7 +204,7 @@ func TestInitialSelection_CurrentActiveSession(t *testing.T) {
 		// Simulate second load with same/different sessions, selectedIndex should NOT change automatically
 		model.selectedIndex = 2
 		resModel, _ = model.Update(sessions)
-		model = resModel.(Model)
+		model = resModel.(*Model)
 		if model.selectedIndex != 2 {
 			t.Errorf("expected selectedIndex to remain 2, got %d", model.selectedIndex)
 		}
@@ -230,7 +230,7 @@ func TestInitialSelection_CurrentActiveSession(t *testing.T) {
 		}
 
 		resModel, _ := model.Update(sessions)
-		model = resModel.(Model)
+		model = resModel.(*Model)
 
 		if model.selectedIndex != 0 {
 			t.Errorf("expected selectedIndex to be 0, got %d", model.selectedIndex)
@@ -269,7 +269,7 @@ func TestSessionNameValidation(t *testing.T) {
 			// Test CreateSessionNameState
 			nameState := CreateSessionNameState{}
 			nameState.textInput.SetValue(tc.input)
-			nextState, _ := nameState.Update(&model, tea.KeyMsg{Type: tea.KeyEnter})
+			nextState, _ := nameState.Update(model, tea.KeyMsg{Type: tea.KeyEnter})
 
 			if tc.expectedOk {
 				if _, ok := nextState.(CreateSessionPathState); !ok {
@@ -287,7 +287,7 @@ func TestSessionNameValidation(t *testing.T) {
 			// Test CreateWorktreeSessionNameState
 			wtNameState := CreateWorktreeSessionNameState{}
 			wtNameState.textInput.SetValue(tc.input)
-			nextWtState, _ := wtNameState.Update(&model, tea.KeyMsg{Type: tea.KeyEnter})
+			nextWtState, _ := wtNameState.Update(model, tea.KeyMsg{Type: tea.KeyEnter})
 
 			if tc.expectedOk {
 				// Success transitions past name check (might fail on directory setup, but shouldn't remain ErrorState due to validation)
